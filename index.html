@@ -75,7 +75,7 @@
   .lcd{background:var(--lcd);color:var(--lcd-ink);border-radius:6px;padding:8px 14px;margin:6px 0 12px;box-shadow:inset 0 2px 6px rgba(0,0,0,.25);display:flex;align-items:baseline;justify-content:flex-end;gap:6px}
   .lcd b{font-size:clamp(52px,8vw,72px);font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-0.02em}
   .lcd i{font-style:normal;font-size:24px;font-weight:600}
-  .readouts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .readouts{display:grid;grid-template-columns:1fr;gap:8px}
   .readouts div{background:#2E3A42;border-radius:6px;padding:6px 10px}
   .readouts strong{display:block;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:#fff}
   .btns{display:flex;flex-direction:column;gap:8px;margin-top:12px}
@@ -91,7 +91,6 @@
   th,td{border:1px solid #9AA8B0;text-align:center;padding:8px 2px;font-size:16px}
   th{background:#E4E9EC;font-weight:600;width:88px}
   td{height:44px}
-  tr.state td{font-size:13px;line-height:1.25;word-break:keep-all}
   td.fresh{background:#FFF6CC}
   td.now{box-shadow:inset 0 0 0 3px var(--steel)}
   .done{display:none;margin-top:12px;border:2px solid var(--warn);background:var(--warn-bg);color:#7A1414;border-radius:8px;padding:12px 14px;font-weight:600}
@@ -245,7 +244,6 @@
         <div class="lcd"><b id="tempNow">--</b><i>℃</i></div>
         <div class="readouts">
           <div><span class="label">경과 시간</span><strong id="timeNow">0분 00초</strong></div>
-          <div><span class="label">물질의 상태</span><strong id="stateNow">-</strong></div>
         </div>
       </div>
       <div class="btns">
@@ -263,7 +261,6 @@
         <tbody>
           <tr id="rowTime"><th>시간(분)</th></tr>
           <tr id="rowTemp"><th>온도(℃)</th></tr>
-          <tr id="rowState" class="state"><th>상태</th></tr>
         </tbody>
       </table>
     </div>
@@ -288,10 +285,8 @@
   if (LAB_TYPE === 'boil') document.body.classList.add('boil');
 
   var CFG = {
-    melt: { form:'A형', P:69, T0:[32,50], k1:[4,12], after:[4,8], cap:95,
-            states:['고체','고체 + 액체','액체'] },
-    boil: { form:'B형', P:78, T0:[32,55], k1:[5,12], after:[3,6], cap:97,
-            states:['액체','액체 + 기체','기체'] }
+    melt: { form:'A형', P:69, T0:[32,50], k1:[4,12], after:[4,8], cap:95 },
+    boil: { form:'B형', P:78, T0:[32,55], k1:[5,12], after:[3,6], cap:97 }
   }[LAB_TYPE];
   document.title = '물질의 상태 변화 가상실험 ' + CFG.form;
 
@@ -375,11 +370,7 @@
     for (var i=0;i<12;i++) if (typeof d.temps[i] !== 'number' || !isFinite(d.temps[i])) return false;
     return true;
   }
-  function stateAt(minute){
-    if (minute < DATA.s) return CFG.states[0];
-    if (minute <= DATA.e) return CFG.states[1];
-    return CFG.states[2];
-  }
+
 
   var DATA_KEY = 'sn_vlab_data_' + LAB_TYPE;
   var DATA = lsJSON(DATA_KEY);
@@ -514,11 +505,10 @@
   showLeave();
 
   /* ---------- 결과 표 ---------- */
-  var tempCells = [], stateCells = [], timeCells = [];
+  var tempCells = [], timeCells = [];
   for (var m=0; m<12; m++){
     var a = document.createElement('td'); a.textContent = m; $('rowTime').appendChild(a); timeCells.push(a);
     var b = document.createElement('td'); $('rowTemp').appendChild(b); tempCells.push(b);
-    var c = document.createElement('td'); $('rowState').appendChild(c); stateCells.push(c);
   }
 
   /* ---------- 실험 기구 ---------- */
@@ -673,14 +663,12 @@
       $('tempNow').textContent = shown;
       $('probeText').textContent = shown + '℃';
       $('timeNow').textContent = fmtTime(minute);
-      $('stateNow').textContent = stateAt(i);
 
       if (i !== lastIdx) {
         for (var k = 0; k < 12; k++) timeCells[k].classList.toggle('now', k === i);
         if (fillTable) {
           for (var j = lastIdx + 1; j <= i; j++) {
             tempCells[j].textContent = T[j];
-            stateCells[j].textContent = stateAt(j);
             tempCells[j].classList.add('fresh');
             (function(cell){ setTimeout(function(){ cell.classList.remove('fresh'); }, 900); })(tempCells[j]);
           }
