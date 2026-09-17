@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>물질의 상태 변화 가상실험</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bench:#E4E9EC; --paper:#FFFFFF; --ink:#1F2A30; --muted:#5E6B73; --line:#C3CDD3;
+    --steel:#2D5D7B; --lcd:#CFDDC4; --lcd-ink:#1D2A18; --warn:#C62828; --warn-bg:#FDECEC;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    background:var(--bench);color:var(--ink);font-size:16px;line-height:1.55;
+    -webkit-user-select:none;user-select:none;
+  }
+  input{-webkit-user-select:text;user-select:text}
+  .warn-bar{
+    position:sticky;top:0;z-index:50;background:var(--warn);color:#fff;
+    padding:12px 16px;text-align:center;font-weight:700;font-size:clamp(16px,2.4vw,21px);line-height:1.4;
+    box-shadow:0 2px 0 #8E1B1B;
+  }
+  .leave-log{display:none;background:var(--warn-bg);color:var(--warn);border-bottom:2px solid var(--warn);padding:8px 16px;text-align:center;font-weight:600}
+  .leave-log.on{display:block}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 16px 40px}
+  header.top{margin-bottom:12px}
+  h1{font-size:clamp(21px,3vw,28px);margin:0;font-weight:700;letter-spacing:-0.01em}
+  .form-tag{display:inline-block;margin-left:8px;padding:2px 10px;border:2px solid var(--ink);border-radius:4px;font-size:.8em;vertical-align:2px}
+
+  .who{background:var(--paper);border:2px solid var(--steel);border-radius:8px;padding:14px;margin-bottom:14px}
+  .who h2{font-size:18px;margin:0 0 10px}
+  .who-form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  .who-form label{display:flex;flex-direction:column;font-weight:600;font-size:14px;gap:4px}
+  .who-form input{font:inherit;font-size:20px;padding:8px 10px;border:1.5px solid #8A979E;border-radius:6px;width:160px}
+  .who-form input#nameIn{width:180px}
+  .who-err{color:var(--warn);font-weight:600;min-height:22px;margin-top:6px;font-size:14px}
+  .who-done{display:none;align-items:center;gap:14px;flex-wrap:wrap;font-size:18px}
+  .who-done b{font-size:22px}
+  .who-done .code{font-size:14px;color:var(--muted)}
+  .who.ok{border-color:var(--line)}
+  .who.ok .who-form,.who.ok h2,.who.ok .who-err{display:none}
+  .who.ok .who-done{display:flex}
+
+  .guide{background:var(--paper);border:1px solid var(--line);border-radius:8px;margin-bottom:14px}
+  .guide summary{cursor:pointer;padding:10px 14px;font-weight:600}
+  .guide .body{padding:0 18px 12px}
+  .guide p{margin:4px 0}
+  .guide ol{margin:4px 0 0;padding-left:22px}
+
+  .lab{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;align-items:start}
+  @media (max-width:760px){.lab{grid-template-columns:1fr}}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px}
+  .panel h2{font-size:17px;margin:0 0 8px;font-weight:600}
+  #bench{display:block;width:100%;height:auto;background:#F5F8F9;border:1px dashed #AEBBC2;border-radius:6px;touch-action:none}
+  #bench.drop-ready{border-color:var(--steel);background:#EEF4F7}
+
+  .tray{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .tile{flex:1 1 0;min-width:96px;background:#F2F5F6;border:1.5px solid var(--line);border-radius:8px;padding:6px 4px 8px;text-align:center;cursor:grab;touch-action:none}
+  .tile svg{width:56px;height:56px;display:block;margin:0 auto}
+  .tile span{display:block;font-size:13px;line-height:1.3;font-weight:500;word-break:keep-all}
+  .tile.used{opacity:.35;cursor:default;border-style:dashed}
+  .tray.locked .tile{opacity:.45;cursor:not-allowed}
+  .tile.shake{animation:shake .35s}
+  @keyframes shake{25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+  .ghost{position:fixed;z-index:100;pointer-events:none;opacity:.9;transform:translate(-50%,-50%) scale(1.08);box-shadow:0 8px 20px rgba(30,40,50,.25);background:#fff}
+  .toast{min-height:24px;margin-top:8px;font-size:14px;color:var(--muted)}
+
+  .meter{background:#3A4750;border-radius:10px;padding:14px;color:#E8EEF1}
+  .meter .label{font-size:13px;color:#B8C4CB}
+  .lcd{background:var(--lcd);color:var(--lcd-ink);border-radius:6px;padding:8px 14px;margin:6px 0 12px;box-shadow:inset 0 2px 6px rgba(0,0,0,.25);display:flex;align-items:baseline;justify-content:flex-end;gap:6px}
+  .lcd b{font-size:clamp(52px,8vw,72px);font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-0.02em}
+  .lcd i{font-style:normal;font-size:24px;font-weight:600}
+  .readouts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .readouts div{background:#2E3A42;border-radius:6px;padding:6px 10px}
+  .readouts strong{display:block;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:#fff}
+  .btns{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  button{font:inherit;font-weight:600;font-size:17px;border-radius:8px;padding:12px;border:2px solid var(--steel);background:var(--steel);color:#fff;cursor:pointer}
+  button.sub{background:#fff;color:var(--steel)}
+  button.small{font-size:15px;padding:6px 14px}
+  button:disabled{background:#D5DCE0;border-color:#D5DCE0;color:#8A969D;cursor:not-allowed}
+  button:focus-visible,.tile:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #F2B705;outline-offset:2px}
+
+  .result{margin-top:14px}
+  .table-scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:640px;table-layout:fixed;background:#fff;font-variant-numeric:tabular-nums}
+  th,td{border:1px solid #9AA8B0;text-align:center;padding:8px 2px;font-size:16px}
+  th{background:#E4E9EC;font-weight:600;width:88px}
+  td{height:44px}
+  tr.state td{font-size:13px;line-height:1.25;word-break:keep-all}
+  td.fresh{background:#FFF6CC}
+  td.now{box-shadow:inset 0 0 0 3px var(--steel)}
+  .done{display:none;margin-top:12px;border:2px solid var(--warn);background:var(--warn-bg);color:#7A1414;border-radius:8px;padding:12px 14px;font-weight:600}
+  .done.on{display:block}
+  .save{margin-top:6px;font-size:14px;font-weight:600}
+  .save.ok{color:#2E6B3A}
+  .save.wait{color:var(--muted)}
+  .save.bad{color:var(--warn)}
+
+  .part{opacity:0;transition:opacity .25s}
+  .part.on{opacity:1}
+  .only-boil{display:none}
+  body.boil .only-boil{display:inline}
+  .tbub{opacity:0;transform-box:fill-box}
+  #bench.boiling .tbub{animation:rise .9s linear infinite}
+  @keyframes rise{0%{opacity:0;transform:translateY(0)}20%{opacity:.9}100%{opacity:0;transform:translateY(-45px)}}
+  @media (prefers-reduced-motion:reduce){
+    #bench.boiling .tbub{animation:none;opacity:.6}
+    .tile.shake{animation:none}
+  }
+</style>
+</head>
+<body>
+<div class="warn-bar" role="alert">⚠ 시험 중 가상실험 외 다른 화면(검색, AI, 앨범 등)으로 넘어가면 접속만 해도 부정행위로 처리됩니다.</div>
+<div class="leave-log" id="leaveLog" aria-live="assertive"></div>
+
+<div class="wrap">
+  <header class="top">
+    <h1>물질의 상태 변화 가상실험 <span class="form-tag" id="formTag">A형</span></h1>
+  </header>
+
+  <section class="who" id="who">
+    <h2>학번과 이름을 입력하세요</h2>
+    <div class="who-form">
+      <label>학번 (예: 10312)<input id="noIn" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+      <label>이름<input id="nameIn" maxlength="20" autocomplete="off"></label>
+      <button id="whoBtn">확인</button>
+    </div>
+    <div class="who-err" id="whoErr" aria-live="polite"></div>
+    <div class="who-done">
+      <span>학번 <b id="noShow"></b></span>
+      <span>이름 <b id="nameShow"></b></span>
+      <span class="code">기기 확인 코드 <span id="devCode">-</span></span>
+      <button id="whoEdit" class="sub small">수정</button>
+    </div>
+  </section>
+
+  <details class="guide" open>
+    <summary>실험 안내</summary>
+    <div class="body">
+      <p><b>목적</b> 물질을 가열하면서 시간에 따른 온도 변화를 측정한다.</p>
+      <ol>
+        <li>학번과 이름을 입력한다.</li>
+        <li>아래의 실험 기구와 물질을 실험대 위로 드래그하여 실험 장치를 꾸민다.</li>
+        <li>장치가 완성되면 [실험 시작] 버튼을 누른다.</li>
+        <li>1분 간격으로 기록되는 시간과 온도를 0분부터 11분까지 시험지 표에 그대로 옮겨 적는다.</li>
+      </ol>
+    </div>
+  </details>
+
+  <div class="lab">
+    <section class="panel">
+      <h2>실험대</h2>
+      <svg id="bench" viewBox="0 0 400 380" role="img" aria-label="실험대">
+        <defs>
+          <clipPath id="beakerClip"><path d="M142 150 L142 281 Q142 288 149 288 L251 288 Q258 288 258 281 L258 150 Z"/></clipPath>
+          <clipPath id="flaskClip"><path d="M188 120 L188 170 L144 274 Q141 287 152 287 L248 287 Q259 287 256 274 L212 170 L212 120 Z"/></clipPath>
+          <pattern id="crystal" width="8" height="8" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill="#F7F5EE"/>
+            <path d="M0 8 L8 0 M-2 2 L2 -2 M6 10 L10 6" stroke="#D9D4C6" stroke-width="1"/>
+          </pattern>
+        </defs>
+
+        <rect x="0" y="338" width="400" height="42" fill="#B9C3C9"/>
+        <rect x="0" y="338" width="400" height="4" fill="#A3AEB5"/>
+
+        <!-- 가열 장치 -->
+        <g id="p-heater" class="part">
+          <rect x="100" y="298" width="200" height="40" rx="6" fill="#56636B"/>
+          <rect x="108" y="288" width="184" height="12" rx="3" fill="#8C979E"/>
+          <rect id="plateGlow" x="108" y="288" width="184" height="12" rx="3" fill="#E4553E" opacity="0"/>
+          <circle id="heatLed" cx="128" cy="318" r="4.5" fill="#2A3136"/>
+          <circle cx="272" cy="318" r="9" fill="#3B454C" stroke="#9AA5AB" stroke-width="2"/>
+          <line x1="272" y1="318" x2="272" y2="310" stroke="#DDE3E6" stroke-width="2"/>
+        </g>
+
+        <!-- 융해: 물질 A가 든 비커 -->
+        <g id="p-beaker" class="part">
+          <path d="M142 150 L142 281 Q142 288 149 288 L251 288 Q258 288 258 281 L258 150 Z" fill="rgba(255,255,255,.75)"/>
+          <g clip-path="url(#beakerClip)">
+            <rect id="liqA" x="138" y="288" width="124" height="0" fill="#F2E3A6"/>
+            <rect id="solA" x="138" y="188" width="124" height="100" fill="url(#crystal)"/>
+          </g>
+          <path d="M140 146 L140 281 Q140 290 149 290 L251 290 Q260 290 260 281 L260 146" fill="none" stroke="#7C8B94" stroke-width="3"/>
+          <path d="M134 146 L140 146 M260 146 L266 146" stroke="#7C8B94" stroke-width="3"/>
+          <g stroke="#7C8B94" stroke-width="1.5">
+            <line x1="244" y1="170" x2="254" y2="170"/><line x1="248" y1="200" x2="254" y2="200"/>
+            <line x1="244" y1="230" x2="254" y2="230"/><line x1="248" y1="260" x2="254" y2="260"/>
+          </g>
+          <text x="272" y="176" font-size="13" fill="#3F4B52">물질 A</text>
+        </g>
+
+        <!-- 기화: 물질 B가 든 가지 달린 삼각 플라스크 -->
+        <g id="p-flask" class="part">
+          <path d="M213 141 L247 128" stroke="#7C8B94" stroke-width="7"/>
+          <path d="M214 141 L247 128" stroke="#F5F8F9" stroke-width="3"/>
+          <path d="M188 120 L188 170 L144 274 Q141 287 152 287 L248 287 Q259 287 256 274 L212 170 L212 120 Z" fill="rgba(255,255,255,.75)"/>
+          <g clip-path="url(#flaskClip)">
+            <rect id="liqB" x="138" y="228" width="124" height="60" fill="#E2EEF4"/>
+            <rect id="menB" x="138" y="227" width="124" height="2" fill="#8FB3C8"/>
+            <circle class="tbub" cx="166" cy="282" r="2.6" fill="#fff" style="animation-delay:0s"/>
+            <circle class="tbub" cx="186" cy="278" r="2" fill="#fff" style="animation-delay:.35s"/>
+            <circle class="tbub" cx="214" cy="283" r="2.4" fill="#fff" style="animation-delay:.6s"/>
+            <circle class="tbub" cx="234" cy="279" r="2" fill="#fff" style="animation-delay:.15s"/>
+            <circle class="tbub" cx="200" cy="272" r="1.8" fill="#fff" style="animation-delay:.8s"/>
+          </g>
+          <path d="M186 112 L186 170 L140 276 Q136 290 150 290 L250 290 Q264 290 260 276 L214 170 L214 112" fill="none" stroke="#7C8B94" stroke-width="3"/>
+          <path d="M181 112 L186 112 M214 112 L219 112" stroke="#7C8B94" stroke-width="3"/>
+          <text x="262" y="236" font-size="13" fill="#3F4B52">물질 B</text>
+        </g>
+
+        <!-- 기화: 고무풍선 -->
+        <g id="p-balloon" class="part">
+          <g transform="rotate(-24 247 128)">
+            <rect x="244" y="124" width="10" height="8" rx="2" fill="#B8423A"/>
+            <ellipse id="balloon" cx="262" cy="128" rx="9" ry="6" fill="#E0605A" stroke="#B8423A" stroke-width="1.5"/>
+            <ellipse id="balloonHi" cx="262" cy="125" rx="3" ry="1.5" fill="#fff" opacity=".45"/>
+          </g>
+        </g>
+
+        <!-- 온도 센서 (기화에서는 고무마개가 끼워짐) -->
+        <g id="p-sensor" class="part">
+          <path d="M228 32 C 290 32, 300 70, 400 64" fill="none" stroke="#33424C" stroke-width="4"/>
+          <rect x="198" y="46" width="4" height="224" rx="2" fill="#A9B2B8"/>
+          <rect x="197" y="262" width="6" height="14" rx="3" fill="#7E888E"/>
+          <path class="only-boil" d="M183 102 L217 102 L214 124 L186 124 Z" fill="#3E4144"/>
+          <rect x="170" y="16" width="60" height="32" rx="6" fill="#33424C"/>
+          <rect x="178" y="23" width="44" height="18" rx="2" fill="#CFDDC4"/>
+          <text id="probeText" x="218" y="37" font-size="12" text-anchor="end" fill="#1D2A18" font-weight="600"></text>
+        </g>
+      </svg>
+
+      <div class="tray locked" id="tray"></div>
+      <div class="toast" id="toast" aria-live="polite"></div>
+    </section>
+
+    <section class="panel">
+      <h2>측정</h2>
+      <div class="meter">
+        <div class="label">온도 센서 측정값</div>
+        <div class="lcd"><b id="tempNow">--</b><i>℃</i></div>
+        <div class="readouts">
+          <div><span class="label">경과 시간</span><strong id="timeNow">0분 00초</strong></div>
+          <div><span class="label">물질의 상태</span><strong id="stateNow">-</strong></div>
+        </div>
+      </div>
+      <div class="btns">
+        <button id="startBtn" disabled>실험 시작</button>
+        <button id="replayBtn" class="sub" disabled>온도 변화 다시보기</button>
+        <button id="resetBtn" class="sub" disabled>기구 다시 배치</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel result">
+    <h2>측정 결과</h2>
+    <div class="table-scroll">
+      <table>
+        <tbody>
+          <tr id="rowTime"><th>시간(분)</th></tr>
+          <tr id="rowTemp"><th>온도(℃)</th></tr>
+          <tr id="rowState" class="state"><th>상태</th></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="done" id="doneMsg">
+      측정이 끝났습니다. 0분부터 11분까지의 시간과 온도를 시험지 표에 그대로 옮겨 적으세요. 옮겨 적기가 끝나면 디벗을 닫으세요. 그 후 다시 디벗을 만지면 부정행위로 처리됩니다.
+      <div class="save wait" id="saveMsg"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ====== 설정: Apps Script 웹 앱 주소(…/exec)를 따옴표 안에 넣으세요 ====== */
+  var API_URL = '';
+  /* ======================================================================= */
+
+  var STEP_MS = 1100;          // 1분이 화면에서 지나가는 시간
+  var DATA_VERSION = 'v1';
+  var LAB_TYPE = new URLSearchParams(location.search).get('type') === 'boil' ? 'boil' : 'melt';
+  if (LAB_TYPE === 'boil') document.body.classList.add('boil');
+
+  var CFG = {
+    melt: { form:'A형', P:69, T0:[32,50], k1:[4,12], after:[4,8], cap:95,
+            states:['고체','고체 + 액체','액체'] },
+    boil: { form:'B형', P:78, T0:[32,55], k1:[5,12], after:[3,6], cap:97,
+            states:['액체','액체 + 기체','기체'] }
+  }[LAB_TYPE];
+  document.title = '물질의 상태 변화 가상실험 ' + CFG.form;
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ---------- 저장소 ---------- */
+  function lsGet(k){ try { return window.localStorage.getItem(k); } catch(e){ return null; } }
+  function lsSet(k,v){ try { window.localStorage.setItem(k,v); } catch(e){} }
+  function lsJSON(k){ try { return JSON.parse(lsGet(k)); } catch(e){ return null; } }
+
+  function newId(){
+    var s = '';
+    if (window.crypto && crypto.getRandomValues) {
+      var a = new Uint8Array(16); crypto.getRandomValues(a);
+      for (var i=0;i<a.length;i++) s += ('0'+a[i].toString(16)).slice(-2);
+    } else {
+      for (var j=0;j<32;j++) s += Math.floor(Math.random()*16).toString(16);
+    }
+    return s;
+  }
+  var deviceId = lsGet('sn_vlab_device');
+  if (!deviceId || !/^[a-z0-9-]{8,64}$/i.test(deviceId)) { deviceId = newId(); lsSet('sn_vlab_device', deviceId); }
+
+  /* ---------- 난수 (기기 ID 기반 고정) ---------- */
+  function hash32(str, seed){
+    var h = seed >>> 0;
+    for (var i=0;i<str.length;i++){ h = Math.imul(h ^ str.charCodeAt(i), 2654435761); h = (h << 13) | (h >>> 19); }
+    h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var devCode = (function(){
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', h = hash32(deviceId, 7), out = '';
+    for (var i=0;i<6;i++){ out += chars[h % chars.length]; h = Math.floor(h / chars.length) ^ hash32(out, i); h >>>= 0; }
+    return out;
+  })();
+  $('devCode').textContent = devCode;
+  $('formTag').textContent = CFG.form;
+
+  /* ---------- 실험값 생성 ---------- */
+  function generate(rng){
+    var P = CFG.P;
+    for (var attempt=0; attempt<500; attempt++){
+      var s = 2 + Math.floor(rng()*5);                               // 일정 구간 시작 2~6분
+      var lo = Math.max(CFG.k1[0], (P - CFG.T0[1]) / s);
+      var hi = Math.min(CFG.k1[1], (P - CFG.T0[0]) / s);
+      if (lo > hi) continue;
+      var slope = lo + rng()*(hi-lo);
+      var T0 = Math.round(P - slope*s);
+      var bend = 1 + rng()*0.3;
+      var Lmax = Math.min(5, 9 - s);
+      var L = 3 + Math.floor(rng()*(Lmax - 2));                      // 일정 구간 길이 3~5분
+      var e = s + L;
+      var temps = [], t;
+      for (t=0; t<s; t++) temps[t] = Math.round(P - (P - T0) * Math.pow(1 - t/s, bend));
+      for (t=s; t<=e; t++) temps[t] = P;
+      var n = 11 - e, d = 0.82 + rng()*0.1;
+      var f = (1 - Math.pow(d, n)) / (1 - d);
+      var rmax = Math.min(CFG.after[1], (CFG.cap - P) / f), rmin = CFG.after[0];
+      if (rmin > rmax) continue;
+      var r0 = rmin + rng()*(rmax - rmin), acc = P;
+      for (var k=1; k<=n; k++){ acc += r0 * Math.pow(d, k-1); temps[e+k] = Math.round(acc); }
+      var ok = temps[0] >= CFG.T0[0] && temps[0] <= CFG.T0[1];
+      for (t=0; t<s && ok; t++) if (temps[t+1] - temps[t] < 2) ok = false;
+      for (t=e+1; t<=11 && ok; t++) if (temps[t] - temps[t-1] < 1 || temps[t] > CFG.cap) ok = false;
+      if (!ok) continue;
+      return { v:DATA_VERSION, temps:temps, s:s, e:e };
+    }
+    return null;
+  }
+  function validData(d){
+    if (!d || !Array.isArray(d.temps) || d.temps.length !== 12) return false;
+    if (typeof d.s !== 'number' || typeof d.e !== 'number' || d.s >= d.e) return false;
+    for (var i=0;i<12;i++) if (typeof d.temps[i] !== 'number' || !isFinite(d.temps[i])) return false;
+    return true;
+  }
+  function stateAt(minute){
+    if (minute < DATA.s) return CFG.states[0];
+    if (minute <= DATA.e) return CFG.states[1];
+    return CFG.states[2];
+  }
+
+  var DATA_KEY = 'sn_vlab_data_' + LAB_TYPE;
+  var DATA = lsJSON(DATA_KEY);
+  if (!validData(DATA)) {
+    DATA = generate(mulberry32(hash32(deviceId + '|' + LAB_TYPE + '|' + DATA_VERSION, 2026)));
+    lsSet(DATA_KEY, JSON.stringify(DATA));
+  }
+  var locked = false;   // 실험 시작 후에는 시트 값으로 바꾸지 않음
+
+  /* ---------- 구글 시트 전송 ---------- */
+  function post(payload){
+    return fetch(API_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).then(function(r){ return r.json(); });
+  }
+  function base(){
+    var st = student || {};
+    return { type:LAB_TYPE, deviceId:deviceId, code:devCode, studentNo:st.no || '', name:st.name || '' };
+  }
+
+  // 전송 대기열: 인터넷이 잠깐 끊겨도 순서대로 다시 보냄
+  var QUEUE_KEY = 'sn_vlab_queue_' + LAB_TYPE;
+  var queue = lsJSON(QUEUE_KEY) || [];
+  var sending = false;
+  function enqueue(payload){
+    payload.qid = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    queue.push(payload);
+    lsSet(QUEUE_KEY, JSON.stringify(queue));
+    flush();
+    return payload.qid;
+  }
+  function flush(){
+    if (!API_URL || sending || !queue.length) { updateSave(); return; }
+    sending = true;
+    var item = queue[0];
+    post(item).then(function(res){
+      sending = false;
+      if (res && (res.ok || /^bad_/.test(res.error || ''))) {   // 잘못된 요청은 재시도하지 않음
+        queue.shift(); lsSet(QUEUE_KEY, JSON.stringify(queue));
+        if (item.action === 'result' && res.ok) { lsSet('sn_vlab_saved_' + LAB_TYPE, item.studentNo); }
+        flush();
+      } else { retryLater(); }
+    }).catch(function(){ sending = false; retryLater(); });
+    updateSave();
+  }
+  var retryTimer = null;
+  function retryLater(){
+    updateSave();
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(flush, 5000);
+  }
+  function updateSave(){
+    var el = $('saveMsg');
+    if (!finished) return;
+    var pendingResult = queue.some(function(q){ return q.action === 'result'; });
+    if (!API_URL) { el.className = 'save bad'; el.textContent = '기록 저장 주소가 설정되지 않았습니다. 선생님께 알리세요.'; }
+    else if (pendingResult && sending) { el.className = 'save wait'; el.textContent = '결과를 선생님께 보내는 중입니다…'; }
+    else if (pendingResult) { el.className = 'save bad'; el.textContent = '결과 전송에 실패해 다시 시도하고 있습니다. 화면을 닫지 말고 기다리세요.'; }
+    else { el.className = 'save ok'; el.textContent = '결과가 선생님께 전송되었습니다.'; }
+  }
+  window.addEventListener('online', flush);
+
+  if (API_URL) {
+    post({ action:'init', type:LAB_TYPE, deviceId:deviceId, code:devCode, data:DATA }).then(function(res){
+      if (res && res.ok && validData(res.data) && !locked) {
+        DATA = res.data; lsSet(DATA_KEY, JSON.stringify(DATA));
+      }
+    }).catch(function(){});
+    flush();
+  }
+
+  /* ---------- 학번·이름 ---------- */
+  var STUDENT_KEY = 'sn_vlab_student';
+  var student = lsJSON(STUDENT_KEY);
+  if (!student || !/^\d{4,6}$/.test(student.no || '') || !student.name) student = null;
+
+  function showStudent(){
+    var ok = !!student;
+    $('who').classList.toggle('ok', ok);
+    $('tray').classList.toggle('locked', !ok);
+    if (ok) { $('noShow').textContent = student.no; $('nameShow').textContent = student.name; }
+    $('whoEdit').disabled = running || finished;
+  }
+  $('whoBtn').addEventListener('click', function(){
+    var no = $('noIn').value.replace(/\s/g, '');
+    var name = $('nameIn').value.replace(/\s+/g, ' ').trim();
+    if (!/^\d{4,6}$/.test(no)) { $('whoErr').textContent = '학번을 숫자로 정확히 입력하세요. (예: 10312)'; return; }
+    if (name.length < 2) { $('whoErr').textContent = '이름을 입력하세요.'; return; }
+    if (!window.confirm('학번 ' + no + ', 이름 ' + name + '\n맞으면 [확인]을 누르세요.')) return;
+    $('whoErr').textContent = '';
+    student = { no:no, name:name };
+    lsSet(STUDENT_KEY, JSON.stringify(student));
+    showStudent();
+    var p = base(); p.action = 'student'; p.leaves = leave.n;
+    enqueue(p);
+  });
+  ['noIn','nameIn'].forEach(function(id){
+    $(id).addEventListener('keydown', function(ev){ if (ev.key === 'Enter') $('whoBtn').click(); });
+  });
+  $('whoEdit').addEventListener('click', function(){
+    if (running || finished) return;
+    $('noIn').value = student ? student.no : '';
+    $('nameIn').value = student ? student.name : '';
+    student = null;
+    showStudent();
+    $('noIn').focus();
+  });
+
+  /* ---------- 화면 이탈 감지 ---------- */
+  var LEAVE_KEY = 'sn_vlab_leave_' + LAB_TYPE;
+  var leave = lsJSON(LEAVE_KEY);
+  if (!leave || typeof leave.n !== 'number') leave = { n:0, last:'' };
+  function showLeave(){
+    if (!leave.n) return;
+    var el = $('leaveLog');
+    el.textContent = '다른 화면으로 이동한 기록이 있습니다: ' + leave.n + '회 (마지막 ' + leave.last + ')';
+    el.className = 'leave-log on';
+  }
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState !== 'hidden') { flush(); return; }
+    if (finished) return;   // 측정 완료 후 안내대로 화면을 닫는 경우는 세지 않음
+    var now = new Date();
+    leave.n += 1;
+    leave.last = now.toLocaleTimeString('ko-KR', { hour12:false });
+    lsSet(LEAVE_KEY, JSON.stringify(leave));
+    showLeave();
+    var p = base(); p.action = 'leave'; p.leaves = leave.n; p.clientTime = now.toLocaleString('ko-KR');
+    enqueue(p);
+  });
+  showLeave();
+
+  /* ---------- 결과 표 ---------- */
+  var tempCells = [], stateCells = [], timeCells = [];
+  for (var m=0; m<12; m++){
+    var a = document.createElement('td'); a.textContent = m; $('rowTime').appendChild(a); timeCells.push(a);
+    var b = document.createElement('td'); $('rowTemp').appendChild(b); tempCells.push(b);
+    var c = document.createElement('td'); $('rowState').appendChild(c); stateCells.push(c);
+  }
+
+  /* ---------- 실험 기구 ---------- */
+  var SENSOR_ICON = '<svg viewBox="0 0 60 60"><rect x="16" y="4" width="28" height="15" rx="3" fill="#33424C"/><rect x="20" y="7" width="20" height="8" rx="1" fill="#CFDDC4"/><rect x="28.5" y="19" width="3" height="36" rx="1.5" fill="#A9B2B8"/>' +
+    (LAB_TYPE === 'boil' ? '<path d="M22 30 L38 30 L36 40 L24 40 Z" fill="#3E4144"/>' : '') + '</svg>';
+  var ITEMS = {
+    heater:{ name:'가열 장치', part:'p-heater', needs:[],
+      icon:'<svg viewBox="0 0 60 60"><rect x="6" y="30" width="48" height="16" rx="3" fill="#56636B"/><rect x="9" y="26" width="42" height="6" rx="2" fill="#8C979E"/><circle cx="44" cy="38" r="4" fill="#3B454C" stroke="#9AA5AB"/><circle cx="14" cy="38" r="2" fill="#2A3136"/></svg>' },
+    beaker:{ name:'물질 A가 든 비커', part:'p-beaker', needs:['heater'],
+      icon:'<svg viewBox="0 0 60 60"><rect x="15" y="26" width="30" height="24" fill="#EFEBDD" stroke="#C9C3B2" stroke-width=".5"/><path d="M14 10 L14 48 Q14 52 18 52 L42 52 Q46 52 46 48 L46 10" fill="none" stroke="#7C8B94" stroke-width="2.5"/></svg>' },
+    flask:{ name:'물질 B가 든 가지 달린 삼각 플라스크', part:'p-flask', needs:['heater'],
+      icon:'<svg viewBox="0 0 60 60"><path d="M26 22 L26 26 L13 48 Q12 52 16 52 L44 52 Q48 52 47 48 L34 26 L34 22" fill="none"/><path d="M34 16 L46 11" stroke="#7C8B94" stroke-width="3"/><path d="M17 42 L43 42 L47 48 Q48 52 44 52 L16 52 Q12 52 13 48 Z" fill="#E2EEF4"/><path d="M26 8 L26 26 L13 48 Q12 52 16 52 L44 52 Q48 52 47 48 L34 26 L34 8" fill="none" stroke="#7C8B94" stroke-width="2.5"/></svg>' },
+    sensor:{ name: LAB_TYPE === 'boil' ? '고무마개가 끼워진 온도 센서' : '온도 센서', part:'p-sensor',
+      needs:[LAB_TYPE === 'boil' ? 'flask' : 'beaker'], icon:SENSOR_ICON },
+    balloon:{ name:'고무풍선', part:'p-balloon', needs:['flask'],
+      icon:'<svg viewBox="0 0 60 60"><ellipse cx="30" cy="24" rx="13" ry="16" fill="#E0605A" stroke="#B8423A" stroke-width="1.5"/><path d="M27 40 L33 40 L31 46 L29 46 Z" fill="#B8423A"/><path d="M30 46 q-4 5 0 10" stroke="#8A969D" fill="none"/></svg>' }
+  };
+  var TRAY = LAB_TYPE === 'boil' ? ['balloon','sensor','heater','flask'] : ['sensor','heater','beaker'];
+  var placedSet = {};
+  var tiles = {};
+
+  TRAY.forEach(function(key){
+    var t = document.createElement('div');
+    t.className = 'tile'; t.dataset.key = key; t.tabIndex = 0;
+    t.setAttribute('role','button');
+    t.innerHTML = ITEMS[key].icon + '<span>' + ITEMS[key].name + '</span>';
+    $('tray').appendChild(t);
+    tiles[key] = t;
+    attachDrag(t);
+  });
+
+  var toastTimer = null;
+  function toast(msg){
+    $('toast').textContent = msg;
+    clearTimeout(toastTimer);
+    if (msg) toastTimer = setTimeout(function(){ $('toast').textContent = ''; }, 2500);
+  }
+  function allPlaced(){ return TRAY.every(function(k){ return placedSet[k]; }); }
+  function anyPlaced(){ return TRAY.some(function(k){ return placedSet[k]; }); }
+
+  var bench = $('bench');
+  function inBench(x, y){
+    var r = bench.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+  function attachDrag(tile){
+    var ghost = null, pid = null;
+    tile.addEventListener('pointerdown', function(ev){
+      if (!student) { toast('학번과 이름을 먼저 입력하세요.'); return; }
+      if (tile.classList.contains('used') || running || finished) return;
+      ev.preventDefault();
+      pid = ev.pointerId;
+      try { tile.setPointerCapture(pid); } catch(e){}
+      ghost = tile.cloneNode(true);
+      ghost.classList.add('ghost');
+      ghost.style.width = tile.offsetWidth + 'px';
+      document.body.appendChild(ghost);
+      moveGhost(ev);
+    });
+    tile.addEventListener('pointermove', function(ev){
+      if (!ghost || ev.pointerId !== pid) return;
+      moveGhost(ev);
+      bench.classList.toggle('drop-ready', inBench(ev.clientX, ev.clientY));
+    });
+    function end(ev){
+      if (!ghost || ev.pointerId !== pid) return;
+      ghost.remove(); ghost = null;
+      bench.classList.remove('drop-ready');
+      if (ev.type === 'pointerup' && inBench(ev.clientX, ev.clientY)) tryPlace(tile.dataset.key);
+      pid = null;
+    }
+    tile.addEventListener('pointerup', end);
+    tile.addEventListener('pointercancel', end);
+    function moveGhost(ev){ ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; }
+  }
+  function tryPlace(key){
+    var item = ITEMS[key];
+    if (item.needs.every(function(n){ return placedSet[n]; })) {
+      placedSet[key] = true;
+      $(item.part).classList.add('on');
+      tiles[key].classList.add('used');
+      $('resetBtn').disabled = false;
+      $('whoEdit').disabled = true;
+      if (allPlaced()) { $('startBtn').disabled = false; toast('실험 장치가 완성되었습니다.'); }
+      else toast('');
+    } else {
+      var t = tiles[key];
+      t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake');
+      toast('그 기구는 지금 놓을 수 없습니다.');
+    }
+  }
+  $('resetBtn').addEventListener('click', function(){
+    if (running || finished) return;
+    TRAY.forEach(function(k){ placedSet[k] = false; $(ITEMS[k].part).classList.remove('on'); tiles[k].classList.remove('used'); });
+    $('startBtn').disabled = true;
+    $('resetBtn').disabled = true;
+    $('whoEdit').disabled = false;
+    toast('');
+  });
+
+  /* ---------- 장치 모습 ---------- */
+  function drawState(progress){   // progress: 상태 변화 진행 정도 0~1
+    if (LAB_TYPE === 'melt') {
+      var FULL = 100, BOTTOM = 288;
+      var hl = FULL * progress, hs = FULL - hl;
+      $('liqA').setAttribute('y', BOTTOM - hl); $('liqA').setAttribute('height', hl);
+      $('solA').setAttribute('y', BOTTOM - hl - hs); $('solA').setAttribute('height', hs);
+    } else {
+      var FULLB = 60, BOTTOMB = 288;
+      var h = FULLB * (1 - progress);
+      $('liqB').setAttribute('y', BOTTOMB - h); $('liqB').setAttribute('height', h);
+      $('menB').setAttribute('y', BOTTOMB - h - 1);
+      $('menB').setAttribute('opacity', h > 1 ? 1 : 0);
+      var rx = 9 + 27 * progress, ry = 6 + 20 * progress;   // 기체가 모여 풍선이 부풂
+      $('balloon').setAttribute('rx', rx); $('balloon').setAttribute('ry', ry);
+      $('balloon').setAttribute('cx', 252 + rx);
+      $('balloonHi').setAttribute('cx', 252 + rx * 1.2); $('balloonHi').setAttribute('cy', 128 - ry * 0.5);
+      $('balloonHi').setAttribute('rx', 3 + rx * 0.2); $('balloonHi').setAttribute('ry', 1.5 + ry * 0.1);
+    }
+  }
+  function setHeating(on){
+    $('plateGlow').setAttribute('opacity', on ? 0.55 : 0);
+    $('heatLed').setAttribute('fill', on ? '#FF4A3A' : '#2A3136');
+  }
+  drawState(0);
+
+  function fmtTime(min){
+    var total = Math.floor(min * 60 + 1e-6);
+    var mm = Math.floor(total / 60), ss = total % 60;
+    return mm + '분 ' + (ss < 10 ? '0' : '') + ss + '초';
+  }
+
+  /* ---------- 실험 진행 ---------- */
+  var running = false, finished = false;
+  function run(fillTable){
+    if (!DATA) return;
+    running = true; locked = true;
+    $('startBtn').disabled = true; $('replayBtn').disabled = true; $('resetBtn').disabled = true;
+    $('whoEdit').disabled = true;
+    setHeating(true);
+    var t0 = null, lastIdx = -1;
+    var T = DATA.temps, s = DATA.s, e = DATA.e;
+    function frame(ts){
+      if (t0 === null) t0 = ts;
+      var minute = Math.min(11, (ts - t0) / STEP_MS);
+      var i = Math.floor(minute), fr = minute - i;
+      var temp = i >= 11 ? T[11] : T[i] + (T[i+1] - T[i]) * fr;
+      var prog = minute < s ? 0 : Math.min(1, (minute - s) / (e - s + 0.6));
+      drawState(prog);
+      if (LAB_TYPE === 'boil') bench.classList.toggle('boiling', minute >= s && prog < 1);
+      var shown = Math.round(temp);
+      $('tempNow').textContent = shown;
+      $('probeText').textContent = shown + '℃';
+      $('timeNow').textContent = fmtTime(minute);
+      $('stateNow').textContent = stateAt(i);
+
+      if (i !== lastIdx) {
+        for (var k = 0; k < 12; k++) timeCells[k].classList.toggle('now', k === i);
+        if (fillTable) {
+          for (var j = lastIdx + 1; j <= i; j++) {
+            tempCells[j].textContent = T[j];
+            stateCells[j].textContent = stateAt(j);
+            tempCells[j].classList.add('fresh');
+            (function(cell){ setTimeout(function(){ cell.classList.remove('fresh'); }, 900); })(tempCells[j]);
+          }
+        }
+        lastIdx = i;
+      }
+      if (minute < 11) { requestAnimationFrame(frame); return; }
+
+      running = false;
+      setHeating(false);
+      bench.classList.remove('boiling');
+      timeCells[11].classList.remove('now');
+      $('replayBtn').disabled = false;
+      if (fillTable) {
+        finished = true;
+        $('doneMsg').className = 'done on';
+        var p = base(); p.action = 'result'; p.data = DATA; p.leaves = leave.n;
+        enqueue(p);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  $('startBtn').addEventListener('click', function(){
+    if (!student || !allPlaced() || running || finished) return;
+    run(true);
+  });
+  $('replayBtn').addEventListener('click', function(){
+    if (running || !finished) return;
+    drawState(0);
+    run(false);
+  });
+
+  showStudent();
+  if (!DATA) toast('실험값을 만들지 못했습니다. 페이지를 새로 고침하세요.');
+})();
+</script>
+</body>
+</html>
