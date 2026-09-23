@@ -27,6 +27,14 @@
   }
   .leave-log{display:none;background:var(--warn-bg);color:var(--warn);border-bottom:2px solid var(--warn);padding:8px 16px;text-align:center;font-weight:600}
   .leave-log.on{display:block}
+  .close-bar{display:none;background:#FFF3CD;color:#7A4B00;border-bottom:2px solid #E0A800;padding:8px 16px;text-align:center;font-weight:700;font-size:18px}
+  .close-bar.on{display:block}
+  .closed{display:none;min-height:70vh;align-items:center;justify-content:center;text-align:center;padding:40px 20px}
+  .closed.on{display:flex}
+  .closed h2{font-size:clamp(26px,4vw,36px);margin:0 0 12px}
+  .closed p{font-size:19px;margin:6px 0;color:var(--muted)}
+  .wm{position:fixed;inset:0;z-index:40;pointer-events:none;background-repeat:repeat}
+  body.is-closed .wrap,body.is-closed .leave-log,body.is-closed .close-bar{display:none}
   .wrap{max-width:1100px;margin:0 auto;padding:18px 16px 40px}
   header.top{margin-bottom:12px}
   h1{font-size:clamp(21px,3vw,28px);margin:0;font-weight:700;letter-spacing:-0.01em}
@@ -118,6 +126,13 @@
 <body>
 <div class="warn-bar" role="alert">⚠ 시험 중 가상실험 외 다른 화면(검색, AI, 앨범 등)으로 넘어가면 접속만 해도 부정행위로 처리됩니다.</div>
 <div class="leave-log" id="leaveLog" aria-live="assertive"></div>
+<div class="close-bar" id="closeBar" aria-live="polite"></div>
+<div class="wm" id="wm" aria-hidden="true"></div>
+<div class="closed" id="closedView"><div>
+  <h2>가상실험이 종료되었습니다.</h2>
+  <p>이 화면은 다시 열 수 없습니다. 디벗을 닫으세요.</p>
+  <p id="closedSave"></p>
+</div></div>
 
 <div class="wrap">
   <header class="top">
@@ -282,6 +297,8 @@
 
   /* ====== 설정: Apps Script 웹 앱 주소(…/exec)를 따옴표 안에 넣으세요 ====== */
   var API_URL = 'https://script.google.com/macros/s/AKfycbxmdp_2oh-t9O9b4zWUuLnEmdTSmA2_EgF1JhhmgZRmMjKGuU_8BDTiRSdUOvf24pu9VQ/exec';
+  var CLOSE_AFTER_MIN = 40;         // 측정이 끝난 뒤 몇 분 후 화면을 닫을지
+  var RESET_CODE = 'sinnam-reset';  // 선생님 기기 잠금 해제용: 주소 끝에 &reset=이 값 (학생에게 알리지 마세요)
   /* ======================================================================= */
 
   var STEP_MS = 1100;          // 1분이 화면에서 지나가는 시간
@@ -431,6 +448,7 @@
   }
   function updateSave(){
     var el = $('saveMsg');
+    updateClosedSave();
     if (!finished) return;
     var pendingResult = queue.some(function(q){ return q.action === 'result'; });
     if (!API_URL) { el.className = 'save bad'; el.textContent = '기록 저장 주소가 설정되지 않았습니다. 선생님께 알리세요.'; }
@@ -454,8 +472,18 @@
   var student = lsJSON(STUDENT_KEY);
   if (!student || !/^\d{4,6}$/.test(student.no || '') || !student.name) student = null;
 
+  function updateWatermark(){
+    var text = (student ? student.no + ' ' + student.name + ' · ' : '') + devCode;
+    var esc = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="170">' +
+      '<text x="150" y="95" text-anchor="middle" transform="rotate(-24 150 85)" ' +
+      'font-family="IBM Plex Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif" font-size="20" font-weight="700" ' +
+      'fill="#1F2A30" fill-opacity="0.09">' + esc + '</text></svg>';
+    $('wm').style.backgroundImage = 'url("data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '")';
+  }
   function showStudent(){
     var ok = !!student;
+    updateWatermark();
     $('who').classList.toggle('ok', ok);
     $('tray').classList.toggle('locked', !ok);
     if (ok) { $('noShow').textContent = student.no; $('nameShow').textContent = student.name; }
@@ -498,7 +526,7 @@
   }
   document.addEventListener('visibilitychange', function(){
     if (document.visibilityState !== 'hidden') { flush(); return; }
-    if (finished) return;   // 측정 완료 후 안내대로 화면을 닫는 경우는 세지 않음
+    if (finished || closedNow || Number(lsGet('sn_vlab_closeat_' + LAB_TYPE))) return;   // 측정 완료 후 화면을 닫는 경우는 세지 않음
     var now = new Date();
     leave.n += 1;
     leave.last = now.toLocaleTimeString('ko-KR', { hour12:false });
@@ -508,6 +536,57 @@
     enqueue(p);
   });
   showLeave();
+
+  /* ---------- 일정 시간 후 화면 닫기 ---------- */
+  var CLOSE_KEY = 'sn_vlab_closeat_' + LAB_TYPE;
+  var closeTimer = null, closedNow = false;
+  function initClose(){
+    var params = new URLSearchParams(location.search);
+    if (params.get('reset') === RESET_CODE) {
+      [CLOSE_KEY, 'sn_vlab_leave_' + LAB_TYPE, 'sn_vlab_student'].forEach(function(k){
+        try { localStorage.removeItem(k); } catch(e){}
+      });
+      params.delete('reset');
+      var q = params.toString();
+      history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+      leave = { n:0, last:'' }; student = null;
+    }
+    var at = Number(lsGet(CLOSE_KEY));
+    if (at) { if (Date.now() >= at) closeLab(); else tickClose(); }
+  }
+  function startCloseTimer(){
+    if (!Number(lsGet(CLOSE_KEY))) lsSet(CLOSE_KEY, String(Date.now() + CLOSE_AFTER_MIN * 60000));
+    tickClose();
+  }
+  function tickClose(){
+    clearTimeout(closeTimer);
+    var left = Number(lsGet(CLOSE_KEY)) - Date.now();
+    if (left <= 0) { closeLab(); return; }
+    var sec = Math.ceil(left / 1000);
+    var bar = $('closeBar');
+    bar.textContent = '이 화면은 ' + Math.floor(sec / 60) + '분 ' + ('0' + (sec % 60)).slice(-2) + '초 후 닫힙니다. 그 전에 결과를 시험지에 옮겨 적으세요.';
+    bar.className = 'close-bar on';
+    closeTimer = setTimeout(tickClose, 1000);
+  }
+  function closeLab(){
+    if (closedNow) return;
+    closedNow = true;
+    clearTimeout(closeTimer);
+    document.body.classList.add('is-closed');
+    $('closedView').className = 'closed on';
+    updateClosedSave();
+    tryCloseTab();
+  }
+  function tryCloseTab(){
+    if (queue.length && API_URL) { setTimeout(tryCloseTab, 3000); return; }   // 전송이 끝난 뒤 닫기
+    try { window.close(); } catch(e){}
+  }
+  function updateClosedSave(){
+    if (!closedNow) return;
+    var el = $('closedSave');
+    var pending = API_URL && queue.some(function(q){ return q.action === 'result'; });
+    el.textContent = pending ? '결과를 선생님께 보내는 중입니다. 잠시만 기다린 뒤 닫으세요.' : '';
+  }
 
   /* ---------- 결과 표 ---------- */
   var tempCells = [], timeCells = [], stateCells = [];
@@ -694,6 +773,7 @@
       $('replayBtn').disabled = false;
       if (fillTable) {
         finished = true;
+        startCloseTimer();
         $('doneMsg').className = 'done on';
         var p = base(); p.action = 'result'; p.data = DATA; p.leaves = leave.n;
         enqueue(p);
@@ -712,6 +792,7 @@
     run(false);
   });
 
+  initClose();
   showStudent();
   if (!DATA) toast('실험값을 만들지 못했습니다. 페이지를 새로 고침하세요.');
 })();
