@@ -27,8 +27,12 @@
   }
   .leave-log{display:none;background:var(--warn-bg);color:var(--warn);border-bottom:2px solid var(--warn);padding:8px 16px;text-align:center;font-weight:600}
   .leave-log.on{display:block}
-  .close-bar{display:none;background:#FFF3CD;color:#7A4B00;border-bottom:2px solid #E0A800;padding:8px 16px;text-align:center;font-weight:700;font-size:18px}
+  .close-bar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:45;background:#FFF3CD;color:#7A4B00;border-top:3px solid #E0A800;
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));text-align:center;font-weight:700;font-size:18px;box-shadow:0 -4px 12px rgba(0,0,0,.12)}
+  .close-bar b{font-size:28px;font-variant-numeric:tabular-nums;margin:0 4px;vertical-align:-2px}
+  .close-bar small{display:block;font-size:14px;font-weight:600}
   .close-bar.on{display:block}
+  body.has-close .wrap{padding-bottom:120px}
   .closed{display:none;min-height:70vh;align-items:center;justify-content:center;text-align:center;padding:40px 20px}
   .closed.on{display:flex}
   .closed h2{font-size:clamp(26px,4vw,36px);margin:0 0 12px}
@@ -126,7 +130,7 @@
 <body>
 <div class="warn-bar" role="alert">⚠ 시험 중 가상실험 외 다른 화면(검색, AI, 앨범 등)으로 넘어가면 접속만 해도 부정행위로 처리됩니다.</div>
 <div class="leave-log" id="leaveLog" aria-live="assertive"></div>
-<div class="close-bar" id="closeBar" aria-live="polite"></div>
+<div class="close-bar" id="closeBar"><span>화면 종료까지</span><b id="closeLeft">--:--</b><small>그 전에 결과를 시험지에 옮겨 적으세요.</small></div>
 <div class="wm" id="wm" aria-hidden="true"></div>
 <div class="closed" id="closedView"><div>
   <h2>가상실험이 종료되었습니다.</h2>
@@ -563,11 +567,16 @@
     var left = Number(lsGet(CLOSE_KEY)) - Date.now();
     if (left <= 0) { closeLab(); return; }
     var sec = Math.ceil(left / 1000);
-    var bar = $('closeBar');
-    bar.textContent = '이 화면은 ' + Math.floor(sec / 60) + '분 ' + ('0' + (sec % 60)).slice(-2) + '초 후 닫힙니다. 그 전에 결과를 시험지에 옮겨 적으세요.';
-    bar.className = 'close-bar on';
-    closeTimer = setTimeout(tickClose, 1000);
+    $('closeLeft').textContent = Math.floor(sec / 60) + '분 ' + ('0' + (sec % 60)).slice(-2) + '초';
+    $('closeBar').className = 'close-bar on';
+    document.body.classList.add('has-close');
+    closeTimer = setTimeout(tickClose, (left % 1000) || 1000);   // 다음 초 경계에 맞춰 갱신
   }
+  // 다른 탭·앱에 갔다 오거나 화면을 껐다 켜면 멈춰 있던 타이머 대신 실제 시각으로 즉시 다시 계산
+  function resyncClose(){ if (!closedNow && Number(lsGet(CLOSE_KEY))) tickClose(); }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') resyncClose(); });
+  window.addEventListener('pageshow', resyncClose);
+  window.addEventListener('focus', resyncClose);
   function closeLab(){
     if (closedNow) return;
     closedNow = true;
