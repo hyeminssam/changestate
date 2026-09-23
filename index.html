@@ -130,10 +130,10 @@
 <body>
 <div class="warn-bar" role="alert">⚠ 시험 중 가상실험 외 다른 화면(검색, AI, 앨범 등)으로 넘어가면 접속만 해도 부정행위로 처리됩니다.</div>
 <div class="leave-log" id="leaveLog" aria-live="assertive"></div>
-<div class="close-bar" id="closeBar"><span>화면 종료까지</span><b id="closeLeft">--:--</b><small>그 전에 결과를 시험지에 옮겨 적으세요.</small></div>
+<div class="close-bar" id="closeBar"><span>화면 종료까지</span><b id="closeLeft">--:--</b><small id="closeNote">학번·이름을 입력한 시각부터 40분 뒤에 이 화면이 닫힙니다.</small></div>
 <div class="wm" id="wm" aria-hidden="true"></div>
 <div class="closed" id="closedView"><div>
-  <h2>가상실험이 종료되었습니다.</h2>
+  <h2>시험 시간이 끝나 가상실험이 종료되었습니다.</h2>
   <p>이 화면은 다시 열 수 없습니다. 디벗을 닫으세요.</p>
   <p id="closedSave"></p>
 </div></div>
@@ -300,9 +300,9 @@
   'use strict';
 
   /* ====== 설정: Apps Script 웹 앱 주소(…/exec)를 따옴표 안에 넣으세요 ====== */
-  var API_URL = 'https://script.google.com/macros/s/AKfycbxmdp_2oh-t9O9b4zWUuLnEmdTSmA2_EgF1JhhmgZRmMjKGuU_8BDTiRSdUOvf24pu9VQ/exec';
-  var CLOSE_AFTER_MIN = 40;         // 측정이 끝난 뒤 몇 분 후 화면을 닫을지
-  var RESET_CODE = 'sinnam-reset';  // 선생님 기기 잠금 해제용: 주소 끝에 &reset=이 값 (학생에게 알리지 마세요)
+  var API_URL = 'https://script.google.com/macros/s/AKfycbxh1YmGn1RlJYginLXyiJkIJcpgmcLOyPByGCq7CbK7u2Ln69MzVqJDe_89iAruEzY65A/exec';
+  var CLOSE_AFTER_MIN = 40;         // 학번·이름 입력 후 몇 분 뒤 화면을 닫을지
+  var RESET_CODE = 'shinnam';  // 선생님 기기 잠금 해제용: 주소 끝에 &reset=이 값 (학생에게 알리지 마세요)
   /* ======================================================================= */
 
   var STEP_MS = 1100;          // 1분이 화면에서 지나가는 시간
@@ -493,6 +493,25 @@
     if (ok) { $('noShow').textContent = student.no; $('nameShow').textContent = student.name; }
     $('whoEdit').disabled = running || finished;
   }
+  // 학생 등록 + 시트에 이미 있는 이 학생의 값·종료 시각·이탈 횟수를 받아와 맞춤
+  function syncStudent(){
+    if (!student) return;
+    var p = base(); p.action = 'student'; p.leaves = leave.n; p.closeAfterMin = CLOSE_AFTER_MIN;
+    if (!API_URL) return;
+    post(p).then(function(res){
+      if (!res || !res.ok) return;
+      if (validData(res.data) && !locked) { DATA = res.data; lsSet(DATA_KEY, JSON.stringify(DATA)); }
+      if (typeof res.leaves === 'number' && res.leaves > leave.n) {
+        leave.n = res.leaves; lsSet(LEAVE_KEY, JSON.stringify(leave)); showLeave();
+      }
+      if (typeof res.closeAt === 'number') {
+        var local = Number(lsGet(CLOSE_KEY));
+        if (!local || res.closeAt < local) lsSet(CLOSE_KEY, String(res.closeAt));
+      }
+      if (res.closed) { lsSet(CLOSE_SENT_KEY, '1'); closeLab('종료 후 재접속'); }
+      else tickClose();
+    }).catch(function(){ enqueue(p); });
+  }
   $('whoBtn').addEventListener('click', function(){
     var no = $('noIn').value.replace(/\s/g, '');
     var name = $('nameIn').value.replace(/\s+/g, ' ').trim();
@@ -503,8 +522,8 @@
     student = { no:no, name:name };
     lsSet(STUDENT_KEY, JSON.stringify(student));
     showStudent();
-    var p = base(); p.action = 'student'; p.leaves = leave.n;
-    enqueue(p);
+    startCloseTimer();     // 학번·이름을 처음 입력한 시각부터 제한 시간 시작 (수정해도 다시 시작하지 않음)
+    syncStudent();
   });
   ['noIn','nameIn'].forEach(function(id){
     $(id).addEventListener('keydown', function(ev){ if (ev.key === 'Enter') $('whoBtn').click(); });
@@ -518,36 +537,60 @@
     $('noIn').focus();
   });
 
-  /* ---------- 화면 이탈 감지 ---------- */
+  /* ---------- 화면 자동 꺼짐 방지 ----------
+     화면이 꺼지면 브라우저는 '다른 화면으로 나감'과 똑같이 알려 주기 때문에 둘을 구분할 수 없음.
+     그래서 이 페이지가 열려 있는 동안에는 화면이 저절로 꺼지지 않게 막아서, 자동 꺼짐이 이탈로 세어지지 않게 함. */
+  var wakeLock = null;
+  function keepAwake(){
+    if (!('wakeLock' in navigator) || wakeLock || document.visibilityState !== 'visible') return;
+    navigator.wakeLock.request('screen').then(function(lock){
+      wakeLock = lock;
+      lock.addEventListener('release', function(){ wakeLock = null; });
+    }).catch(function(){});
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') keepAwake(); });
+  document.addEventListener('pointerdown', keepAwake, { passive:true });
+  keepAwake();
+
+  /* ---------- 화면 이탈 감지 (어떤 상황이든 모두 셈) ---------- */
+  function phase(){
+    if (closedNow) return '종료 후';
+    if (!student) return '입력 전';
+    if (running) return '측정 중';
+    if (finished) return '측정 완료';
+    return '측정 전';
+  }
   var LEAVE_KEY = 'sn_vlab_leave_' + LAB_TYPE;
   var leave = lsJSON(LEAVE_KEY);
   if (!leave || typeof leave.n !== 'number') leave = { n:0, last:'' };
   function showLeave(){
     if (!leave.n) return;
     var el = $('leaveLog');
-    el.textContent = '다른 화면으로 이동한 기록이 있습니다: ' + leave.n + '회 (마지막 ' + leave.last + ')';
+    el.textContent = '다른 화면으로 이동한 기록이 있습니다: ' + leave.n + '회' + (leave.last ? ' (마지막 ' + leave.last + ')' : '');
     el.className = 'leave-log on';
   }
   document.addEventListener('visibilitychange', function(){
     if (document.visibilityState !== 'hidden') { flush(); return; }
-    if (finished || closedNow || Number(lsGet('sn_vlab_closeat_' + LAB_TYPE))) return;   // 측정 완료 후 화면을 닫는 경우는 세지 않음
     var now = new Date();
     leave.n += 1;
     leave.last = now.toLocaleTimeString('ko-KR', { hour12:false });
     lsSet(LEAVE_KEY, JSON.stringify(leave));
     showLeave();
-    var p = base(); p.action = 'leave'; p.leaves = leave.n; p.clientTime = now.toLocaleString('ko-KR');
+    var p = base(); p.action = 'leave'; p.leaves = leave.n; p.clientTime = now.toLocaleString('ko-KR'); p.phase = phase();
     enqueue(p);
   });
   showLeave();
 
   /* ---------- 일정 시간 후 화면 닫기 ---------- */
   var CLOSE_KEY = 'sn_vlab_closeat_' + LAB_TYPE;
-  var closeTimer = null, closedNow = false;
+  var closedNow = false;
+  var CLOSE_SENT_KEY = 'sn_vlab_closesent_' + LAB_TYPE;
+  var closeInterval = null;
   function initClose(){
+    $('closeNote').textContent = '학번·이름을 입력한 시각부터 ' + CLOSE_AFTER_MIN + '분 뒤에 이 화면이 닫힙니다.';
     var params = new URLSearchParams(location.search);
     if (params.get('reset') === RESET_CODE) {
-      [CLOSE_KEY, 'sn_vlab_leave_' + LAB_TYPE, 'sn_vlab_student'].forEach(function(k){
+      [CLOSE_KEY, CLOSE_SENT_KEY, 'sn_vlab_leave_' + LAB_TYPE, 'sn_vlab_student'].forEach(function(k){
         try { localStorage.removeItem(k); } catch(e){}
       });
       params.delete('reset');
@@ -555,34 +598,40 @@
       history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
       leave = { n:0, last:'' }; student = null;
     }
-    var at = Number(lsGet(CLOSE_KEY));
-    if (at) { if (Date.now() >= at) closeLab(); else tickClose(); }
+    tickClose();
   }
   function startCloseTimer(){
     if (!Number(lsGet(CLOSE_KEY))) lsSet(CLOSE_KEY, String(Date.now() + CLOSE_AFTER_MIN * 60000));
     tickClose();
   }
+  // 남은 시간은 항상 '종료 시각 - 현재 시각'으로 계산 (탭 이동·화면 꺼짐·재접속과 상관없이 흐름)
   function tickClose(){
-    clearTimeout(closeTimer);
-    var left = Number(lsGet(CLOSE_KEY)) - Date.now();
-    if (left <= 0) { closeLab(); return; }
+    var at = Number(lsGet(CLOSE_KEY));
+    if (!at || closedNow) return;
+    var left = at - Date.now();
+    if (left <= 0) { closeLab('시간 종료'); return; }
     var sec = Math.ceil(left / 1000);
     $('closeLeft').textContent = Math.floor(sec / 60) + '분 ' + ('0' + (sec % 60)).slice(-2) + '초';
     $('closeBar').className = 'close-bar on';
     document.body.classList.add('has-close');
-    closeTimer = setTimeout(tickClose, (left % 1000) || 1000);   // 다음 초 경계에 맞춰 갱신
+    if (!closeInterval) closeInterval = setInterval(tickClose, 500);
   }
-  // 다른 탭·앱에 갔다 오거나 화면을 껐다 켜면 멈춰 있던 타이머 대신 실제 시각으로 즉시 다시 계산
-  function resyncClose(){ if (!closedNow && Number(lsGet(CLOSE_KEY))) tickClose(); }
-  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') resyncClose(); });
-  window.addEventListener('pageshow', resyncClose);
-  window.addEventListener('focus', resyncClose);
-  function closeLab(){
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') tickClose(); });
+  window.addEventListener('pageshow', tickClose);
+  window.addEventListener('focus', tickClose);
+
+  function closeLab(reason){
     if (closedNow) return;
     closedNow = true;
-    clearTimeout(closeTimer);
+    clearInterval(closeInterval); closeInterval = null;
+    if (!Number(lsGet(CLOSE_KEY)) || Number(lsGet(CLOSE_KEY)) > Date.now()) lsSet(CLOSE_KEY, String(Date.now()));
     document.body.classList.add('is-closed');
     $('closedView').className = 'closed on';
+    if (student && !lsGet(CLOSE_SENT_KEY)) {
+      lsSet(CLOSE_SENT_KEY, '1');
+      var p = base(); p.action = 'close'; p.reason = reason || ''; p.leaves = leave.n;
+      enqueue(p);
+    }
     updateClosedSave();
     tryCloseTab();
   }
@@ -593,7 +642,7 @@
   function updateClosedSave(){
     if (!closedNow) return;
     var el = $('closedSave');
-    var pending = API_URL && queue.some(function(q){ return q.action === 'result'; });
+    var pending = API_URL && queue.length > 0;
     el.textContent = pending ? '결과를 선생님께 보내는 중입니다. 잠시만 기다린 뒤 닫으세요.' : '';
   }
 
@@ -782,7 +831,6 @@
       $('replayBtn').disabled = false;
       if (fillTable) {
         finished = true;
-        startCloseTimer();
         $('doneMsg').className = 'done on';
         var p = base(); p.action = 'result'; p.data = DATA; p.leaves = leave.n;
         enqueue(p);
@@ -803,6 +851,7 @@
 
   initClose();
   showStudent();
+  syncStudent();
   if (!DATA) toast('실험값을 만들지 못했습니다. 페이지를 새로 고침하세요.');
 })();
 </script>
